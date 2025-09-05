@@ -1,0 +1,62 @@
+ <!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <title>Cattle Breed & Measurement</title>
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
+</head>
+<body>
+  <div class="container">
+    <h1>Cattle Breed & Measurement</h1>
+
+    <div class="card upload-card">
+      <label class="file-label">
+        <input id="imageInput" type="file" accept="image/*" />
+        <span>Select image</span>
+      </label>
+
+      <div class="controls">
+        <label>Top-K:
+          <input id="topk" type="number" min="1" value="3" />
+        </label>
+
+        <label>Calibration (cm/px) <small>(optional)</small>:
+          <input id="calib" type="text" placeholder="e.g. 0.020" />
+        </label>
+
+        <button id="predictBtn" class="btn">Predict & Measure</button>
+      </div>
+
+      <div id="previewBox" class="preview">
+        <img id="previewImg" src="" alt="preview" style="display:none;" />
+        <div id="noPreview">No image selected</div>
+      </div>
+    </div>
+
+    <div class="card results-card">
+      <h2>Results</h2>
+      <div id="predictions" class="section">
+        <h3>Predictions</h3>
+        <ul id="predList"></ul>
+      </div>
+
+      <div id="measurements" class="section">
+        <h3>Measurements</h3>
+        <pre id="measureText">No measurements yet.</pre>
+      </div>
+
+      <div class="actions">
+        <button id="saveBtn" class="btn" disabled>Save Evaluation</button>
+        <div id="savedMsg" class="muted"></div>
+      </div>
+    </div>
+
+    <footer class="muted">
+      Model loaded: {{ 'Yes' if model_loaded else 'No' }} | Classes: {{ num_classes }}
+    </footer>
+  </div>
+
+  <script src="{{ url_for('static', filename='app.js') }}"></script>
+</body>
+</html>
