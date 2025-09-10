@@ -1,0 +1,92 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Results</title>
+    <link rel="stylesheet" href="/static/results.css">
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Roboto:ital,wght@0,100..900;1,100..900&display=swap"
+        rel="stylesheet">
+</head>
+
+<body>
+    <nav>
+        <div class="logo">
+            <a href="/templates/index.html"><img src="/logo.png" alt=""></a>
+        </div>
+    </nav>
+
+    <div class="main">
+        <div class="rect">
+
+        </div>
+        <div class="content">
+            <h1 id="resultsTitle">Results Screen</h1>
+            <div class="cont-down">
+                <div class="cont-rect">
+                </div>
+                <div class="cont-details">
+                    <div id="breedName">Breed Name: </div>
+                    <div id="confidenceScore">Confidence Score: </div>
+                    <div id="keyBreedInfo">Key Breed Info:</div>
+                    <button class="save" id="saveBtn">Save to Logbook</button>
+                </div>
+            </div>
+            <button class="try" id="tryBtn">Try Again</button>
+        </div>
+    </div>
+    <script>
+        const resultsTranslations = {
+            hindi: {
+                resultsTitle: "परिणाम स्क्रीन",
+                breedName: "नस्ल का नाम:",
+                confidenceScore: "विश्वास स्कोर:",
+                keyBreedInfo: "मुख्य नस्ल जानकारी:",
+                saveBtn: "लॉगबुक में सहेजें",
+                tryBtn: "फिर प्रयास करें",
+            },
+            english: {
+                resultsTitle: "Results Screen",
+                breedName: "Breed Name:",
+                confidenceScore: "Confidence Score:",
+                keyBreedInfo: "Key Breed Info:",
+                saveBtn: "Save to Logbook",
+                tryBtn: "Try Again",
+            }
+        };
+        function applyResultsLanguage() {
+            const lang = localStorage.getItem('language') || 'english';
+            const t = resultsTranslations[lang];
+            document.getElementById('resultsTitle').innerText = t.resultsTitle;
+            document.getElementById('breedName').innerText = t.breedName;
+            document.getElementById('confidenceScore').innerText = t.confidenceScore;
+            document.getElementById('keyBreedInfo').innerText = t.keyBreedInfo;
+            document.getElementById('saveBtn').innerText = t.saveBtn;
+            document.getElementById('tryBtn').innerText = t.tryBtn;
+            document.getElementById('hindiBtn').innerText = t.hindiBtn;
+            document.getElementById('englishBtn').innerText = t.englishBtn;
+        }
+        document.addEventListener('DOMContentLoaded', function () {
+            applyResultsLanguage();
+            document.getElementById('englishBtn').onclick = function (e) {
+                e.preventDefault();
+                localStorage.setItem('language', 'english');
+                applyResultsLanguage();
+            };
+            document.getElementById('hindiBtn').onclick = function (e) {
+                e.preventDefault();
+                localStorage.setItem('language', 'hindi');
+                applyResultsLanguage();
+            };
+            document.getElementById('tryBtn').onclick = function (e) {
+                e.preventDefault();
+                window.location.href = 'home.html';
+            };
+        });
+    </script>
+</body>
+
+</html>

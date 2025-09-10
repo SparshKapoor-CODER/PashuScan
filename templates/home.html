@@ -1,0 +1,129 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Home</title>
+    <link rel="stylesheet" href="/static/home.css">
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Roboto:ital,wght@0,100..900;1,100..900&display=swap"
+        rel="stylesheet">
+</head>
+
+<body>
+    <nav>
+        <div class="logo">
+            <a href="/templates/index.html"><img src="/logo.png" alt=""></a>
+        </div>
+    </nav>
+
+    <div class="main">
+        <div class="rect">
+
+        </div>
+        <div class="content">
+            <h1 id="homeTitle">Home Screen</h1>
+            <p id="homeDesc">The viewfinder encourages pointing the camera at an animal.</p>
+            <div class="buttons">
+                <button class="click" id="clickBtn">Click Photo</button>
+                <button class="gallery" id="galleryBtn">Gallery</button>
+                <input type="file" id="galleryInput" accept="image/*" style="display:none">
+            </div>
+            <div id="cameraPreview" style="display:none; flex-direction:column; align-items:center; margin-top:20px;">
+                <video id="video" width="320" height="240" autoplay style="border:1px solid #ccc;"></video>
+                <button id="captureBtn" style="background: #2b9348; margin-top:10px;">Capture Photo</button>
+                <canvas id="canvas" width="320" height="240" style="display:none; margin-top:10px;"></canvas>
+            </div>
+            <div id="cameraError" style="color:red; margin-top:10px;"></div>
+        </div>
+        
+        <div class="log">
+            <a href="/templates/logbook.html">📖</a>
+        </div>
+    </div>
+    <script>
+        const homeTranslations = {
+            hindi: {
+                homeTitle: "होम स्क्रीन",
+                homeDesc: "व्यूफाइंडर जानवर की ओर कैमरा इंगित करने के लिए प्रोत्साहित करता है।",
+                clickBtn: "फोटो क्लिक करें",
+                galleryBtn: "गैलरी"
+            },
+            english: {
+                homeTitle: "Home Screen",
+                homeDesc: "The viewfinder encourages pointing the camera at an animal.",
+                clickBtn: "Click Photo",
+                galleryBtn: "Gallery"
+            }
+        };
+        function applyHomeLanguage() {
+            const lang = localStorage.getItem('language') || 'english';
+            const t = homeTranslations[lang];
+            document.getElementById('homeTitle').innerText = t.homeTitle;
+            document.getElementById('homeDesc').innerText = t.homeDesc;
+            document.getElementById('clickBtn').innerText = t.clickBtn;
+            document.getElementById('galleryBtn').innerText = t.galleryBtn;
+        }
+        document.addEventListener('DOMContentLoaded', function () {
+            applyHomeLanguage();
+            const clickBtn = document.getElementById('clickBtn');
+            const galleryBtn = document.getElementById('galleryBtn');
+            const galleryInput = document.getElementById('galleryInput');
+            const cameraPreview = document.getElementById('cameraPreview');
+            const video = document.getElementById('video');
+            const captureBtn = document.getElementById('captureBtn');
+            const canvas = document.getElementById('canvas');
+            const cameraError = document.getElementById('cameraError');
+            let stream = null;
+
+            clickBtn.onclick = async function () {
+                cameraError.innerText = "";
+                cameraPreview.style.display = 'flex';
+                canvas.style.display = 'none';
+                // Request camera access
+                try {
+                    stream = await navigator.mediaDevices.getUserMedia({ video: true });
+                    video.srcObject = stream;
+                } catch (err) {
+                    cameraPreview.style.display = 'none';
+                    cameraError.innerText = 'Camera permission denied or not available.';
+                }
+            };
+
+            captureBtn.onclick = function () {
+                if (stream) {
+                    canvas.style.display = 'block';
+                    const context = canvas.getContext('2d');
+                    context.drawImage(video, 0, 0, canvas.width, canvas.height);
+                    // Save image as DataURL
+                    const dataURL = canvas.toDataURL('image/png');
+                    localStorage.setItem('selectedImage', dataURL);
+                    // Stop camera
+                    stream.getTracks().forEach(track => track.stop());
+                    video.srcObject = null;
+                    // Redirect to upload.html
+                    window.location.href = 'upload.html';
+                }
+            };
+
+            galleryBtn.onclick = function () {
+                galleryInput.click();
+            };
+            galleryInput.onchange = function (e) {
+                if (e.target.files.length > 0) {
+                    const file = e.target.files[0];
+                    const reader = new FileReader();
+                    reader.onload = function (evt) {
+                        localStorage.setItem('selectedImage', evt.target.result);
+                        window.location.href = 'upload.html';
+                    };
+                    reader.readAsDataURL(file);
+                }
+            };
+        });
+    </script>
+</body>
+
+</html>

@@ -1,0 +1,67 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Upload</title>
+    <link rel="stylesheet" href="/static/upload.css">
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Roboto:ital,wght@0,100..900;1,100..900&display=swap"
+        rel="stylesheet">
+</head>
+
+<body>
+    <nav>
+        <div class="logo">
+            <a href="/templates/index.html"><img src="/logo.png" alt=""></a>
+        </div>
+    </nav>
+
+    <div class="main">
+        <div class="rect">
+            <h2 id="previewTitle">Preview of selected:</h2>
+            <div class="preview">
+                <img id="previewImg" src="" alt="" style="max-width:25vw; max-height:50vw; width:auto; height:auto;">
+                <button class="upload" id="uploadBtn">Upload Image</button>
+            </div>
+        </div>
+
+        <div class="content">
+            <div class="identify" id="identify"></div>
+            <div class="loading" id="loading"></div>
+        </div>
+    </div>
+    <script>
+        const uploadTranslations = {
+            hindi: {
+                previewTitle: "चयनित का पूर्वावलोकन:",
+                uploadBtn: "छवि अपलोड करें",
+                hindiBtn: "हिंदी",
+                englishBtn: "अंग्रेज़ी"
+            },
+            english: {
+                previewTitle: "Preview of selected:",
+                uploadBtn: "Upload Image",
+                hindiBtn: "हिंदी",
+                englishBtn: "English"
+            }
+        };
+        function applyUploadLanguage() {
+            const lang = localStorage.getItem('language') || 'english';
+            const t = uploadTranslations[lang];
+            document.getElementById('previewTitle').innerText = t.previewTitle;
+            document.getElementById('uploadBtn').innerText = t.uploadBtn;
+        }
+        document.addEventListener('DOMContentLoaded', function () {
+            var imgData = localStorage.getItem('selectedImage');
+            if (imgData) {
+                document.getElementById('previewImg').src = imgData;
+            }
+            applyUploadLanguage();
+        });
+    </script>
+</body>
+
+</html>
