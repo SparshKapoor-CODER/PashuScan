@@ -2,6 +2,7 @@ import os
 import io
 import uuid
 import json
+import base64
 from pathlib import Path
 from PIL import Image
 import numpy as np
@@ -17,7 +18,6 @@ import cv2
 # import your modules (ensure these files are in the same directory)
 from measure import CattleMeasurements
 from data_manager import CattleDataManager
-# The file the user uploaded is named predect.py (typo) which contains DogBreedCNN definition.
 import predect
 
 # ---------- Configuration ----------
@@ -37,6 +37,7 @@ app.config['UPLOAD_FOLDER'] = str(UPLOAD_FOLDER)
 # ---------- Global objects (load once) ----------
 data_manager = CattleDataManager(output_dir=str(BASE_DIR / "cattle_evaluations"))
 measure = CattleMeasurements(calibration_factor=None)
+last_prediction = None  # to store last prediction for results.html
 
 # load labels & model
 def load_labels(labels_file):
@@ -79,7 +80,6 @@ except Exception:
     ])
 
 def predict_topk(image_pil, topk=3):
-    """Return list of (breed, prob) using the loaded model."""
     if model is None or not idx_to_breed:
         return []
     x = transform(image_pil).unsqueeze(0).to(DEVICE)
@@ -96,6 +96,22 @@ def predict_topk(image_pil, topk=3):
 def index():
     return render_template("index.html", model_loaded=bool(model), num_classes=len(idx_to_breed))
 
+@app.route("/home.html")
+def home():
+    return render_template("home.html")
+
+@app.route("/upload.html")
+def upload():
+    return render_template("upload.html")
+
+@app.route("/results.html")
+def results_page():
+    return render_template("results.html")
+
+@app.route("/logbook.html")
+def logbook():
+    return render_template("logbook.html")
+
 @app.route("/uploads/<filename>")
 def uploaded_file(filename):
     safe = os.path.basename(filename)
@@ -106,41 +122,46 @@ def uploaded_file(filename):
 
 @app.route("/predict", methods=["POST"])
 def predict():
-    """
-    Expects multipart/form-data with:
-      - image: file
-      - topk: optional int
-      - calib_cm_per_px: optional float (applies to measurement)
-    Returns JSON:
-      { image_url, predictions: [{breed, confidence}], measurements: {...}, calib }
-    """
-    if "image" not in request.files:
-        return jsonify({"error": "No image provided"}), 400
-    f = request.files["image"]
-    fname = f.filename or ""
-    ext = os.path.splitext(fname)[1].lower() or ".jpg"
-    unique_name = f"{uuid.uuid4().hex}{ext}"
-    out_path = UPLOAD_FOLDER / unique_name
-    f.save(str(out_path))
+    global last_prediction
 
-    # open PIL for prediction (preserve original)
-    pil = Image.open(str(out_path)).convert("RGB")
+    pil = None
+    unique_name = None
 
-    # topk
+    if "image" in request.files:  # file upload
+        f = request.files["image"]
+        fname = f.filename or ""
+        ext = os.path.splitext(fname)[1].lower() or ".jpg"
+        unique_name = f"{uuid.uuid4().hex}{ext}"
+        out_path = UPLOAD_FOLDER / unique_name
+        f.save(str(out_path))
+        pil = Image.open(str(out_path)).convert("RGB")
+    else:  # try base64 string
+        data = request.get_json(force=True, silent=True)
+        if not data or "image" not in data:
+            return jsonify({"error": "No image provided"}), 400
+        img_b64 = data["image"]
+        if "," in img_b64:
+            img_b64 = img_b64.split(",", 1)[1]
+        try:
+            img_bytes = base64.b64decode(img_b64)
+            pil = Image.open(io.BytesIO(img_bytes)).convert("RGB")
+            unique_name = f"{uuid.uuid4().hex}.jpg"
+            pil.save(str(UPLOAD_FOLDER / unique_name))
+        except Exception as e:
+            return jsonify({"error": f"Invalid base64 image: {e}"}), 400
+
     try:
-        topk = int(request.form.get("topk", 3))
+        topk = int(request.form.get("topk", 3)) if request.form else 3
     except Exception:
         topk = 3
 
-    # optional calibration factor
-    calib = request.form.get("calib_cm_per_px", None)
+    calib = request.form.get("calib_cm_per_px") if request.form else None
     if calib:
         try:
             measure.calibration_factor = float(calib)
         except:
             measure.calibration_factor = None
 
-    # prediction
     try:
         preds = predict_topk(pil, topk=topk)
         preds_out = [{"breed": b, "confidence": float(p)} for b, p in preds]
@@ -148,7 +169,6 @@ def predict():
         preds_out = []
         print("Prediction error:", e)
 
-    # measurements using measure.extract_measurements (requires BGR numpy)
     try:
         img_bgr = cv2.cvtColor(np.array(pil), cv2.COLOR_RGB2BGR)
         measurements = measure.extract_measurements(img_bgr, bbox=None)
@@ -157,24 +177,23 @@ def predict():
         measurements = None
 
     resp = {
-        "image_url": f"/uploads/{unique_name}",
+        "image_url": f"/uploads/{unique_name}" if unique_name else None,
         "predictions": preds_out,
         "measurements": measurements,
         "calibration": measure.calibration_factor
     }
+
+    last_prediction = resp
     return jsonify(resp)
+
+@app.route("/results", methods=["GET"])
+def results():
+    if not last_prediction:
+        return jsonify({"error": "No prediction available"}), 404
+    return jsonify(last_prediction)
 
 @app.route("/save_evaluation", methods=["POST"])
 def save_evaluation():
-    """
-    Accepts JSON:
-      {
-        image_url: "/uploads/xxxxx.jpg",
-        classification: {breed, is_purebred?},
-        measurements: {...},
-        metadata: {...}
-      }
-    """
     data = request.get_json(force=True)
     if not data:
         return jsonify({"error": "Invalid JSON"}), 400
@@ -182,7 +201,7 @@ def save_evaluation():
     image_url = data.get("image_url")
     if not image_url:
         return jsonify({"error": "image_url required"}), 400
-    # convert url path to filepath
+
     filename = os.path.basename(image_url)
     image_path = str(UPLOAD_FOLDER / filename)
     detection = data.get("detection", {})
@@ -198,7 +217,6 @@ def save_evaluation():
             classification=classification,
             metadata=metadata
         )
-        # optionally return bpa export path
         bpa = data_manager.export_to_bpa({
             "timestamp": saved_json_path.split("_")[-1] if saved_json_path else "",
             "measurements": measurements,
@@ -209,7 +227,31 @@ def save_evaluation():
 
     return jsonify({"status": "ok", "saved_path": saved_json_path})
 
-# ---------- run ----------
+
+@app.route('/get_logbook', methods=['GET'])
+def get_logbook():
+    """Return all saved evaluation JSON files from cattle_evaluations folder (filesystem fallback)."""
+    folder = BASE_DIR / "cattle_evaluations"
+    out = []
+    try:
+        if not folder.exists():
+            return jsonify([])
+
+        # load files sorted by modification time (newest first)
+        files = sorted(folder.glob('*.json'), key=lambda p: p.stat().st_mtime, reverse=True)
+        for p in files:
+            try:
+                with open(p, 'r', encoding='utf-8') as f:
+                    j = json.load(f)
+                    out.append(j)
+            except Exception as e:
+                # log and skip unreadable files
+                print(f"Failed to read {p}: {e}")
+        return jsonify(out)
+    except Exception as e:
+        print("Error in /get_logbook:", repr(e))
+        return jsonify({"error": str(e)}), 500
+
+
 if __name__ == "__main__":
-    # Simple dev server
     app.run(host="0.0.0.0", port=5000, debug=True)
