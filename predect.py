@@ -11,6 +11,7 @@ import tkinter as tk
 from tkinter import filedialog, messagebox, simpledialog
 import numpy as np
 import cv2
+import re
 
 # Import measurement and data manager modules
 from measure import CattleMeasurements
@@ -85,7 +86,24 @@ class BreedPredictorApp:
             self.model, self.idx_to_breed = self.load_model_and_mapping(MODEL_PATH, LABELS_FILE)
             self.model_loaded_from = MODEL_PATH
         except Exception as e:
-            messagebox.showwarning("Model load", f"Could not load default model/labels:\n{e}\nUse Load Model/Labels to choose files.")
+            # Extract information about the size mismatch
+            error_msg = str(e)
+            mismatch_info = self.extract_mismatch_info(error_msg)
+            
+            if mismatch_info:
+                detailed_msg = (
+                    f"Model expects {mismatch_info['current_shape']} but checkpoint has {mismatch_info['checkpoint_shape']}.\n"
+                    f"This means your model was trained on {mismatch_info['checkpoint_classes']} classes "
+                    f"but your labels file has {mismatch_info['current_classes']} classes.\n\n"
+                    f"Possible solutions:\n"
+                    f"1. Use a model trained on {mismatch_info['current_classes']} classes\n"
+                    f"2. Use a labels file with {mismatch_info['checkpoint_classes']} classes\n"
+                    f"3. Retrain the model with your current labels file"
+                )
+                messagebox.showwarning("Model load", f"Could not load default model/labels:\n{detailed_msg}\n\nUse Load Model/Labels to choose files.")
+            else:
+                messagebox.showwarning("Model load", f"Could not load default model/labels:\n{e}\nUse Load Model/Labels to choose files.")
+            
             self.model_loaded_from = None
 
         # UI elements
@@ -99,6 +117,39 @@ class BreedPredictorApp:
         self.manual_cal_mode = False
         self.manual_clicks = []
 
+    def extract_mismatch_info(self, error_msg):
+        """Extract information about size mismatch from error message"""
+        pattern = r'shape in current model is torch\.Size\(\[(\d+), (\d+)\]\)\.\s+size mismatch for .*?checkpoint.*?torch\.Size\(\[(\d+), (\d+)\]\)'
+        match = re.search(pattern, error_msg)
+        
+        if match:
+            current_rows, current_cols = int(match.group(1)), int(match.group(2))
+            checkpoint_rows, checkpoint_cols = int(match.group(3)), int(match.group(4))
+            
+            return {
+                'current_shape': f"{current_rows}x{current_cols}",
+                'checkpoint_shape': f"{checkpoint_rows}x{checkpoint_cols}",
+                'current_classes': current_rows,
+                'checkpoint_classes': checkpoint_rows
+            }
+        
+        # Try another pattern for bias
+        bias_pattern = r'shape in current model is torch\.Size\(\[(\d+)\]\)\.\s+size mismatch for .*?checkpoint.*?torch\.Size\(\[(\d+)\]\)'
+        bias_match = re.search(bias_pattern, error_msg)
+        
+        if bias_match:
+            current_size = int(bias_match.group(1))
+            checkpoint_size = int(bias_match.group(2))
+            
+            return {
+                'current_shape': f"{current_size}",
+                'checkpoint_shape': f"{checkpoint_size}",
+                'current_classes': current_size,
+                'checkpoint_classes': checkpoint_size
+            }
+        
+        return None
+
     def load_model_and_mapping(self, model_path, labels_file):
         # Read labels (supports xlsx or csv)
         if not os.path.exists(labels_file):
@@ -111,7 +162,7 @@ class BreedPredictorApp:
         if 'breed' not in df.columns:
             raise ValueError("Labels file must contain a 'breed' column")
 
-        all_breeds = sorted(df["breed"].unique())
+        all_breeds = sorted(df['breed'].unique())
         idx_to_breed = {i: breed for i, breed in enumerate(all_breeds)}
         num_classes = len(all_breeds)
 
@@ -119,8 +170,49 @@ class BreedPredictorApp:
             raise FileNotFoundError(f"Model file not found: {model_path}")
 
         model = DogBreedCNN(num_classes)
-        state = torch.load(model_path, map_location=self.device)
-        model.load_state_dict(state)
+        
+        # First try to load the model normally
+        try:
+            state = torch.load(model_path, map_location=self.device)
+            model.load_state_dict(state)
+        except RuntimeError as e:
+            # If there's a size mismatch, try to handle it gracefully
+            if "size mismatch" in str(e):
+                # Check if we can adapt the model to the checkpoint
+                checkpoint_state = torch.load(model_path, map_location=self.device)
+                
+                # Get the number of classes from the checkpoint
+                checkpoint_classes = checkpoint_state['classifier.3.weight'].shape[0]
+                
+                if checkpoint_classes != num_classes:
+                    # Ask user if they want to adapt the model
+                    response = messagebox.askyesno(
+                        "Model Mismatch", 
+                        f"Model was trained on {checkpoint_classes} classes but labels file has {num_classes} classes. "
+                        f"Would you like to adapt the model to use {checkpoint_classes} classes from the checkpoint?"
+                    )
+                    
+                    if response:
+                        # Recreate model with correct number of classes
+                        model = DogBreedCNN(checkpoint_classes)
+                        model.load_state_dict(checkpoint_state)
+                        
+                        # Update the idx_to_breed mapping with placeholder names
+                        idx_to_breed = {i: f"Class_{i+1}" for i in range(checkpoint_classes)}
+                        messagebox.showinfo(
+                            "Model Adapted", 
+                            f"Model adapted to use {checkpoint_classes} classes. "
+                            f"You may want to load a labels file with the correct breed names."
+                        )
+                    else:
+                        raise RuntimeError(f"Model expects {num_classes} classes but checkpoint has {checkpoint_classes} classes")
+                else:
+                    # Some other size mismatch error
+                    raise e
+            else:
+                # Some other error
+                raise e
+                
         model.to(self.device)
         model.eval()
         return model, idx_to_breed
@@ -399,7 +491,7 @@ class BreedPredictorApp:
         # attempt to read predicted label from UI
         pred = self.result_label.cget("text").replace("Prediction:", "").strip()
         if pred and pred != "(no model loaded)":
-            classification = {"breed": pred, "is_purebred": False}
+            classification = {'breed': pred, "is_purebred": False}
         saved_path = self.data_manager.save_evaluation(
             image_path=self.current_image_path,
             detection=detection,
@@ -435,7 +527,7 @@ class BreedPredictorApp:
         model = self.model
         device = self.device
         img = Image.open(image_path).convert("RGB")
-        x = transforms.Resize((IMG_SIZE, IMG_SIZE))(img)
+        x = transforms.Resize((IMG_SIZE, IM_SIZE))(img)
         x_t = transforms.ToTensor()(x).unsqueeze(0).to(device)
         activations = []
         gradients = []
@@ -475,7 +567,7 @@ class BreedPredictorApp:
         heatmap = cv2.applyColorMap(heatmap, cv2.COLORMAP_JET)
         heatmap = cv2.cvtColor(heatmap, cv2.COLOR_BGR2RGB)
         orig = np.array(img.resize((IMG_SIZE, IMG_SIZE)))
-        overlay = (0.6 * orig + 0.4 * heatmap).astype(np.uint8)
+        overlay = (0.6 * orig + 0.4 * heatmap).ast(np.uint8)
         handle.remove()
         return Image.fromarray(overlay)
 
