@@ -30,38 +30,201 @@
         </div>
     </div>
     <script>
-        const logbookTranslations = {
-            hindi: {
-                predictionsTitle: "अनुमान:",
-                measurementsTitle: "माप:",
-            },
-            english: {
-                predictionsTitle: "Predictions:",
-                measurementsTitle: "Measurements:",
-            }
-        };
-        function applyLogbookLanguage() {
-            const lang = localStorage.getItem('language') || 'english';
-            const t = logbookTranslations[lang];
-            document.getElementById('predictionsTitle').innerText = t.predictionsTitle;
-            document.getElementById('measurementsTitle').innerText = t.measurementsTitle;
-            document.getElementById('hindiBtn').innerText = t.hindiBtn;
-            document.getElementById('englishBtn').innerText = t.englishBtn;
+document.addEventListener('DOMContentLoaded', async function () {
+  // language map
+  const lang = localStorage.getItem('language') || 'english';
+  const labels = {
+    english: {
+      predictionsTitle: 'Predictions:',
+      measurementsTitle: 'Measurements:',
+      breedLabel: 'Breed Name:',
+      confidenceLabel: 'Confidence Score:',
+      noMeasurements: '(no measurements)',
+      entryLabel: 'Entry'
+    },
+    hindi: {
+      predictionsTitle: 'अनुमान:',
+      measurementsTitle: 'माप:',
+      breedLabel: 'नस्ल का नाम:',
+      confidenceLabel: 'विश्वास स्कोर:',
+      noMeasurements: '(कोई माप नहीं)',
+      entryLabel: 'एंट्री'
+    }
+  }[lang];
+
+  // set headings
+  document.getElementById('predictionsTitle').innerText = labels.predictionsTitle;
+  document.getElementById('measurementsTitle').innerText = labels.measurementsTitle;
+
+  const entriesContainer = document.querySelector('.entries');
+  entriesContainer.innerHTML = 'Loading...';
+
+  try {
+    const resp = await fetch('/get_logbook');
+    const text = await resp.text();
+
+    let data;
+    try {
+      data = JSON.parse(text);
+    } catch (e) {
+      entriesContainer.innerText = 'Failed to parse server response. See console.';
+      console.error('get_logbook response text:', text);
+      return;
+    }
+
+    if (!resp.ok) {
+      entriesContainer.innerText = 'Server error loading logbook: ' + (data.error || JSON.stringify(data));
+      console.error('/get_logbook error:', data);
+      return;
+    }
+
+    if (!Array.isArray(data) || data.length === 0) {
+      entriesContainer.innerText = 'No saved predictions yet.';
+      return;
+    }
+
+    // Clear and render
+    entriesContainer.innerHTML = '';
+    data.forEach((entry, idx) => {
+      const card = document.createElement('div');
+      card.style.border = '1px solid #ddd';
+      card.style.padding = '10px';
+      card.style.marginBottom = '12px';
+      card.style.borderRadius = '6px';
+      card.style.background = '#fff';
+
+      // Header: Entry number + timestamp if available
+      const header = document.createElement('div');
+      header.style.fontWeight = '700';
+      const ts = (entry.metadata && entry.metadata.saved_at) || entry.timestamp || '';
+      header.innerText = `${labels.entryLabel} ${idx + 1}${ts ? ' — ' + ts : ''}`;
+      card.appendChild(header);
+
+      // Breed + Confidence (try several possible shapes)
+      const classification = entry.classification || {};
+      let breed = classification.breed || null;
+      let confidence = classification.confidence || null;
+      // fallback to predictions array if classification not present
+      if ((!breed || typeof breed === 'undefined') && Array.isArray(entry.predictions) && entry.predictions.length > 0) {
+        breed = entry.predictions[0].breed;
+        confidence = entry.predictions[0].confidence;
+      }
+      // fallback keys
+      if (!breed && entry.breed) {
+        breed = entry.breed;
+      }
+
+      const breedDiv = document.createElement('div');
+      breedDiv.style.marginTop = '8px';
+      breedDiv.innerText = `${labels.breedLabel} ${breed || 'N/A'}`;
+      card.appendChild(breedDiv);
+
+      const confDiv = document.createElement('div');
+      if (typeof confidence !== 'undefined' && confidence !== null) {
+        const confNum = Number(confidence);
+        confDiv.innerText = `${labels.confidenceLabel} ${confNum <= 1 ? (confNum * 100).toFixed(2) + '%' : confNum}`;
+      } else {
+        confDiv.innerText = `${labels.confidenceLabel} N/A`;
+      }
+      card.appendChild(confDiv);
+
+      // Measurements block (match /results formatting)
+      const measBlockTitle = document.createElement('div');
+      measBlockTitle.style.marginTop = '10px';
+      measBlockTitle.style.fontWeight = '600';
+      measBlockTitle.innerText = labels.measurementsTitle;
+      card.appendChild(measBlockTitle);
+
+      const meas = entry.measurements || null;
+      if (!meas || (typeof meas === 'object' && Object.keys(meas).length === 0)) {
+        const none = document.createElement('div');
+        none.style.color = '#666';
+        none.innerText = labels.noMeasurements;
+        card.appendChild(none);
+      } else {
+        // create readable list: body_length_px/cm, height_px/cm, contour_area, rump_angle, positions
+        const mcontainer = document.createElement('div');
+        mcontainer.style.marginTop = '6px';
+        mcontainer.style.whiteSpace = 'pre-wrap';
+        mcontainer.style.fontFamily = 'monospace';
+        mcontainer.style.fontSize = '0.95em';
+
+        function pushRow(name, px, cm) {
+          const row = document.createElement('div');
+          let text = `${name}: `;
+          if (px != null) text += `${px} px`;
+          if (cm != null) text += `  —  ${cm} cm`;
+          row.innerText = text;
+          mcontainer.appendChild(row);
         }
-        document.addEventListener('DOMContentLoaded', function () {
-            applyLogbookLanguage();
-            document.getElementById('englishBtn').onclick = function (e) {
-                e.preventDefault();
-                localStorage.setItem('language', 'english');
-                applyLogbookLanguage();
-            };
-            document.getElementById('hindiBtn').onclick = function (e) {
-                e.preventDefault();
-                localStorage.setItem('language', 'hindi');
-                applyLogbookLanguage();
-            };
-        });
-    </script>
+
+        // body_length
+        pushRow('body_length', meas.body_length_px ?? meas.body_length_px, meas.body_length_cm ?? meas.body_length_cm);
+        // height
+        pushRow('height', meas.height_px ?? meas.height_px, meas.height_cm ?? meas.height_cm);
+        // contour_area (px^2)
+        const ca_px = meas.contour_area_px ?? meas.contour_area_px;
+        if (ca_px != null) {
+          const row = document.createElement('div');
+          row.innerText = `contour_area: ${ca_px} px^2`;
+          mcontainer.appendChild(row);
+        }
+        // rump angle
+        if (typeof meas.rump_angle !== 'undefined' && meas.rump_angle !== null) {
+          const row = document.createElement('div');
+          row.innerText = `rump_angle: ${meas.rump_angle}`;
+          mcontainer.appendChild(row);
+        }
+        // positions
+        if (Array.isArray(meas.tailhead_position)) {
+          const row = document.createElement('div');
+          row.innerText = `tailhead_position: [${meas.tailhead_position.join(', ')}]`;
+          mcontainer.appendChild(row);
+        }
+        if (Array.isArray(meas.withers_position)) {
+          const row = document.createElement('div');
+          row.innerText = `withers_position: [${meas.withers_position.join(', ')}]`;
+          mcontainer.appendChild(row);
+        }
+        // calibration info
+        if (meas.calibration_factor_cm_per_px) {
+          const row = document.createElement('div');
+          row.innerText = `calibration (cm/px): ${meas.calibration_factor_cm_per_px}`;
+          mcontainer.appendChild(row);
+        } else {
+          const row = document.createElement('div');
+          row.style.color = '#666';
+          row.innerText = `calibration (cm/px): not set`;
+          mcontainer.appendChild(row);
+        }
+
+        card.appendChild(mcontainer);
+      }
+
+      // Optionally show the saved image thumbnail if available
+      if (entry.image_url) {
+        const imgDiv = document.createElement('div');
+        imgDiv.style.marginTop = '8px';
+        const img = document.createElement('img');
+        img.src = entry.image_url;
+        img.style.maxWidth = '200px';
+        img.style.border = '1px solid #ccc';
+        img.style.borderRadius = '4px';
+        imgDiv.appendChild(img);
+        card.appendChild(imgDiv);
+      }
+
+      entriesContainer.appendChild(card);
+    });
+
+  } catch (err) {
+    console.error('Error loading /get_logbook:', err);
+    entriesContainer.innerText = 'Failed to load logbook. See console for details.';
+  }
+});
+</script>
+
+
 </body>
 
 </html>
