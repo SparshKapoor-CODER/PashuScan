@@ -4,8 +4,8 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Logbook</title>
-    <link rel="stylesheet" href="/static/logbook.css">
+    <title>Results</title>
+    <link rel="stylesheet" href="/static/results.css">
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=Roboto:ital,wght@0,100..900;1,100..900&display=swap"
@@ -18,213 +18,192 @@
             <a href="/templates/index.html"><img src="/logo.png" alt=""></a>
         </div>
     </nav>
-    <div class="main">
-        <h1 id="predictionsTitle">Predictions:</h1>
-        <div class="entries">
-            <!-- Saved Results will finally arrive here -->
-        </div>
 
-        <h2 id="measurementsTitle">Measurements:</h2>
-        <div class="meas">
-            <!-- Measurements here -->
+    <div class="main">
+        <div class="rect">
+
+        </div>
+        <div class="content">
+            <h1 id="resultsTitle">Results Screen</h1>
+            <div class="cont-down">
+                <div class="cont-rect">
+                </div>
+                <div class="cont-details">
+                    <div id="breedName">Breed Name: </div>
+                    <div id="confidenceScore">Confidence Score: </div>
+                    <div id="keyBreedInfo">Key Breed Info:</div>
+                    <button class="save" id="saveBtn">Save to Logbook</button>
+                </div>
+            </div>
+            <button class="try" id="tryBtn">Try Again</button>
         </div>
     </div>
     <script>
 document.addEventListener('DOMContentLoaded', async function () {
-  // language map
-  const lang = localStorage.getItem('language') || 'english';
-  const labels = {
-    english: {
-      predictionsTitle: 'Predictions:',
-      measurementsTitle: 'Measurements:',
-      breedLabel: 'Breed Name:',
-      confidenceLabel: 'Confidence Score:',
-      noMeasurements: '(no measurements)',
-      entryLabel: 'Entry'
-    },
-    hindi: {
-      predictionsTitle: 'अनुमान:',
-      measurementsTitle: 'माप:',
-      breedLabel: 'नस्ल का नाम:',
-      confidenceLabel: 'विश्वास स्कोर:',
-      noMeasurements: '(कोई माप नहीं)',
-      entryLabel: 'एंट्री'
-    }
-  }[lang];
-
-  // set headings
-  document.getElementById('predictionsTitle').innerText = labels.predictionsTitle;
-  document.getElementById('measurementsTitle').innerText = labels.measurementsTitle;
-
-  const entriesContainer = document.querySelector('.entries');
-  entriesContainer.innerHTML = 'Loading...';
-
+  // get the prediction result (prefer sessionStorage, else fallback to /results)
+  let data = null;
   try {
-    const resp = await fetch('/get_logbook');
-    const text = await resp.text();
-
-    let data;
-    try {
-      data = JSON.parse(text);
-    } catch (e) {
-      entriesContainer.innerText = 'Failed to parse server response. See console.';
-      console.error('get_logbook response text:', text);
-      return;
+    const raw = sessionStorage.getItem('lastResult');
+    if (raw) data = JSON.parse(raw);
+    if (!data) {
+      const r = await fetch('/results');
+      if (r.ok) data = await r.json();
     }
-
-    if (!resp.ok) {
-      entriesContainer.innerText = 'Server error loading logbook: ' + (data.error || JSON.stringify(data));
-      console.error('/get_logbook error:', data);
-      return;
-    }
-
-    if (!Array.isArray(data) || data.length === 0) {
-      entriesContainer.innerText = 'No saved predictions yet.';
-      return;
-    }
-
-    // Clear and render
-    entriesContainer.innerHTML = '';
-    data.forEach((entry, idx) => {
-      const card = document.createElement('div');
-      card.style.border = '1px solid #ddd';
-      card.style.padding = '10px';
-      card.style.marginBottom = '12px';
-      card.style.borderRadius = '6px';
-      card.style.background = '#fff';
-
-      // Header: Entry number + timestamp if available
-      const header = document.createElement('div');
-      header.style.fontWeight = '700';
-      const ts = (entry.metadata && entry.metadata.saved_at) || entry.timestamp || '';
-      header.innerText = `${labels.entryLabel} ${idx + 1}${ts ? ' — ' + ts : ''}`;
-      card.appendChild(header);
-
-      // Breed + Confidence (try several possible shapes)
-      const classification = entry.classification || {};
-      let breed = classification.breed || null;
-      let confidence = classification.confidence || null;
-      // fallback to predictions array if classification not present
-      if ((!breed || typeof breed === 'undefined') && Array.isArray(entry.predictions) && entry.predictions.length > 0) {
-        breed = entry.predictions[0].breed;
-        confidence = entry.predictions[0].confidence;
-      }
-      // fallback keys
-      if (!breed && entry.breed) {
-        breed = entry.breed;
-      }
-
-      const breedDiv = document.createElement('div');
-      breedDiv.style.marginTop = '8px';
-      breedDiv.innerText = `${labels.breedLabel} ${breed || 'N/A'}`;
-      card.appendChild(breedDiv);
-
-      const confDiv = document.createElement('div');
-      if (typeof confidence !== 'undefined' && confidence !== null) {
-        const confNum = Number(confidence);
-        confDiv.innerText = `${labels.confidenceLabel} ${confNum <= 1 ? (confNum * 100).toFixed(2) + '%' : confNum}`;
-      } else {
-        confDiv.innerText = `${labels.confidenceLabel} N/A`;
-      }
-      card.appendChild(confDiv);
-
-      // Measurements block (match /results formatting)
-      const measBlockTitle = document.createElement('div');
-      measBlockTitle.style.marginTop = '10px';
-      measBlockTitle.style.fontWeight = '600';
-      measBlockTitle.innerText = labels.measurementsTitle;
-      card.appendChild(measBlockTitle);
-
-      const meas = entry.measurements || null;
-      if (!meas || (typeof meas === 'object' && Object.keys(meas).length === 0)) {
-        const none = document.createElement('div');
-        none.style.color = '#666';
-        none.innerText = labels.noMeasurements;
-        card.appendChild(none);
-      } else {
-        // create readable list: body_length_px/cm, height_px/cm, contour_area, rump_angle, positions
-        const mcontainer = document.createElement('div');
-        mcontainer.style.marginTop = '6px';
-        mcontainer.style.whiteSpace = 'pre-wrap';
-        mcontainer.style.fontFamily = 'monospace';
-        mcontainer.style.fontSize = '0.95em';
-
-        function pushRow(name, px, cm) {
-          const row = document.createElement('div');
-          let text = `${name}: `;
-          if (px != null) text += `${px} px`;
-          if (cm != null) text += `  —  ${cm} cm`;
-          row.innerText = text;
-          mcontainer.appendChild(row);
-        }
-
-        // body_length
-        pushRow('body_length', meas.body_length_px ?? meas.body_length_px, meas.body_length_cm ?? meas.body_length_cm);
-        // height
-        pushRow('height', meas.height_px ?? meas.height_px, meas.height_cm ?? meas.height_cm);
-        // contour_area (px^2)
-        const ca_px = meas.contour_area_px ?? meas.contour_area_px;
-        if (ca_px != null) {
-          const row = document.createElement('div');
-          row.innerText = `contour_area: ${ca_px} px^2`;
-          mcontainer.appendChild(row);
-        }
-        // rump angle
-        if (typeof meas.rump_angle !== 'undefined' && meas.rump_angle !== null) {
-          const row = document.createElement('div');
-          row.innerText = `rump_angle: ${meas.rump_angle}`;
-          mcontainer.appendChild(row);
-        }
-        // positions
-        if (Array.isArray(meas.tailhead_position)) {
-          const row = document.createElement('div');
-          row.innerText = `tailhead_position: [${meas.tailhead_position.join(', ')}]`;
-          mcontainer.appendChild(row);
-        }
-        if (Array.isArray(meas.withers_position)) {
-          const row = document.createElement('div');
-          row.innerText = `withers_position: [${meas.withers_position.join(', ')}]`;
-          mcontainer.appendChild(row);
-        }
-        // calibration info
-        if (meas.calibration_factor_cm_per_px) {
-          const row = document.createElement('div');
-          row.innerText = `calibration (cm/px): ${meas.calibration_factor_cm_per_px}`;
-          mcontainer.appendChild(row);
-        } else {
-          const row = document.createElement('div');
-          row.style.color = '#666';
-          row.innerText = `calibration (cm/px): not set`;
-          mcontainer.appendChild(row);
-        }
-
-        card.appendChild(mcontainer);
-      }
-
-      // Optionally show the saved image thumbnail if available
-      if (entry.image_url) {
-        const imgDiv = document.createElement('div');
-        imgDiv.style.marginTop = '8px';
-        const img = document.createElement('img');
-        img.src = entry.image_url;
-        img.style.maxWidth = '200px';
-        img.style.border = '1px solid #ccc';
-        img.style.borderRadius = '4px';
-        imgDiv.appendChild(img);
-        card.appendChild(imgDiv);
-      }
-
-      entriesContainer.appendChild(card);
-    });
-
-  } catch (err) {
-    console.error('Error loading /get_logbook:', err);
-    entriesContainer.innerText = 'Failed to load logbook. See console for details.';
+  } catch (e) {
+    console.error('Error loading result:', e);
   }
+
+  // helper for language labels
+  function t(key) {
+    const lang = localStorage.getItem('language') || 'english';
+    const map = {
+      english: {
+        breedName: 'Breed Name:',
+        confidenceScore: 'Confidence Score:',
+        keyBreedInfo: 'Measurements:',
+        setCalib: 'Set calibration (cm per px):',
+        applyCalib: 'Apply',
+        saveBtn: 'Save to Logbook',
+        tryBtn: 'Try Again'
+      },
+      hindi: {
+        breedName: 'नस्ल का नाम:',
+        confidenceScore: 'विश्वास स्कोर:',
+        keyBreedInfo: 'माप:',
+        setCalib: 'कैलिब्रेशन दर्ज करें (सेमी/px):',
+        applyCalib: 'लागू करें',
+        saveBtn: 'लॉगबुक में सहेजें',
+        tryBtn: 'फिर प्रयास करें'
+      }
+    };
+    return (map[lang] && map[lang][key]) || map.english[key];
+  }
+
+  // show top prediction
+  if (data && data.predictions && data.predictions.length > 0) {
+    const best = data.predictions[0];
+    document.getElementById('breedName').innerText = `${t('breedName')} ${best.breed || 'N/A'}`;
+    const conf = Number(best.confidence);
+    document.getElementById('confidenceScore').innerText = `${t('confidenceScore')} ${conf <= 1 ? (conf*100).toFixed(2) + '%' : conf}`;
+  }
+
+  // measurements block
+  const measBlock = document.getElementById('keyBreedInfo');
+  function showNoMeas() {
+    measBlock.innerText = t('keyBreedInfo') + ' No measurements found.';
+  }
+
+  const measurements = data && data.measurements ? data.measurements : null;
+  if (!measurements) {
+    showNoMeas();
+  } else {
+    // Render px / computed cm / angle / positions
+    measBlock.innerHTML = `<strong>${t('keyBreedInfo')}</strong>`;
+    const table = document.createElement('div');
+    table.style.marginTop = '8px';
+    table.style.whiteSpace = 'pre-wrap';
+
+    // helper to append row with px and cm if available
+    function appendRow(name, pxValue, cmValue) {
+      const row = document.createElement('div');
+      let text = `${name}: `;
+      if (pxValue != null) text += `${pxValue} px`;
+      if (cmValue != null) text += `  —  ${cmValue} cm`;
+      row.innerText = text;
+      table.appendChild(row);
+    }
+
+    appendRow('body_length', measurements.body_length_px, measurements.body_length_cm);
+    appendRow('height', measurements.height_px, measurements.height_cm);
+    appendRow('contour_area', measurements.contour_area_px, measurements.contour_area_px ? `${measurements.contour_area_px} px^2` : null);
+    appendRow('rump_angle', measurements.rump_angle, null);
+    if (measurements.tailhead_position) {
+      appendRow('tailhead_position', `[${measurements.tailhead_position.join(', ')}]`, null);
+    }
+    if (measurements.withers_position) {
+      appendRow('withers_position', `[${measurements.withers_position.join(', ')}]`, null);
+    }
+
+    // calibration info
+    const calibRow = document.createElement('div');
+    calibRow.style.marginTop = '10px';
+    const calibVal = measurements.calibration_factor_cm_per_px || null;
+    calibRow.innerHTML = `Calibration (cm/px): ${calibVal !== null ? calibVal : '<em>not set</em>'}`;
+    table.appendChild(calibRow);
+
+    // show input to set calibration client-side
+    const inputRow = document.createElement('div');
+    inputRow.style.marginTop = '8px';
+    inputRow.innerHTML = `
+      <label>${t('setCalib')}</label>
+      <input id="calibInput" type="number" step="any" placeholder="e.g. 0.02" style="width:120px"/>
+      <button id="calibApply">${t('applyCalib')}</button>
+      <div id="calibMsg" style="margin-top:6px;color: #555;"></div>
+    `;
+    table.appendChild(inputRow);
+
+    measBlock.appendChild(table);
+
+    // apply calibration (compute cm from px client-side and keep in-memory 'data' updated)
+    document.getElementById('calibApply').addEventListener('click', function () {
+      const v = parseFloat(document.getElementById('calibInput').value);
+      const msg = document.getElementById('calibMsg');
+      if (!v || isNaN(v) || v <= 0) {
+        msg.innerText = 'Enter a valid positive number.';
+        return;
+      }
+      // update the measurement cm fields using px * v
+      if (measurements.body_length_px) measurements.body_length_cm = (measurements.body_length_px * v).toFixed(2);
+      if (measurements.height_px) measurements.height_cm = (measurements.height_px * v).toFixed(2);
+      measurements.calibration_factor_cm_per_px = v;
+      // persist calibration locally for later use (optional)
+      localStorage.setItem('last_calibration_cm_per_px', v);
+      msg.innerText = `Calibration applied. body_length_cm=${measurements.body_length_cm} cm`;
+      // re-render updated values by reloading the page (quick) or by updating DOM directly:
+      // For simplicity, update DOM by setting text again:
+      // (We simply reload the page to show the changes)
+      sessionStorage.setItem('lastResult', JSON.stringify(data));
+      // re-run this block to re-render with computed cm
+      location.reload();
+    });
+  }
+
+  // Save button - include measurements (including any computed cm)
+  document.getElementById('saveBtn').addEventListener('click', async function () {
+    if (!data || !data.image_url) { alert('Nothing to save'); return; }
+    const payload = {
+      image_url: data.image_url,
+      classification: data.predictions && data.predictions[0] ? data.predictions[0] : {},
+      measurements: data.measurements || {},
+      metadata: { saved_at: new Date().toISOString() }
+    };
+    try {
+      const r = await fetch('/save_evaluation', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(payload)
+      });
+      const j = await r.json();
+      if (r.ok) {
+        alert('Saved to logbook');
+        // store lastResult in sessionStorage (so the saved data matches UI)
+        sessionStorage.setItem('lastResult', JSON.stringify(data));
+        window.location.href = 'logbook.html';
+      } else {
+        alert('Save failed: ' + (j.error || JSON.stringify(j)));
+      }
+    } catch (err) {
+      console.error('Save failed', err);
+      alert('Save failed. See console.');
+    }
+  });
+
+  // Try again
+  document.getElementById('tryBtn').addEventListener('click', () => {
+    window.location.href = 'home.html';
+  });
+
 });
 </script>
-
-
 </body>
-
 </html>
