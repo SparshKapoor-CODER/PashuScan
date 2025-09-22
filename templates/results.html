@@ -39,54 +39,171 @@
         </div>
     </div>
     <script>
-        const resultsTranslations = {
-            hindi: {
-                resultsTitle: "परिणाम स्क्रीन",
-                breedName: "नस्ल का नाम:",
-                confidenceScore: "विश्वास स्कोर:",
-                keyBreedInfo: "मुख्य नस्ल जानकारी:",
-                saveBtn: "लॉगबुक में सहेजें",
-                tryBtn: "फिर प्रयास करें",
-            },
-            english: {
-                resultsTitle: "Results Screen",
-                breedName: "Breed Name:",
-                confidenceScore: "Confidence Score:",
-                keyBreedInfo: "Key Breed Info:",
-                saveBtn: "Save to Logbook",
-                tryBtn: "Try Again",
-            }
-        };
-        function applyResultsLanguage() {
-            const lang = localStorage.getItem('language') || 'english';
-            const t = resultsTranslations[lang];
-            document.getElementById('resultsTitle').innerText = t.resultsTitle;
-            document.getElementById('breedName').innerText = t.breedName;
-            document.getElementById('confidenceScore').innerText = t.confidenceScore;
-            document.getElementById('keyBreedInfo').innerText = t.keyBreedInfo;
-            document.getElementById('saveBtn').innerText = t.saveBtn;
-            document.getElementById('tryBtn').innerText = t.tryBtn;
-            document.getElementById('hindiBtn').innerText = t.hindiBtn;
-            document.getElementById('englishBtn').innerText = t.englishBtn;
-        }
-        document.addEventListener('DOMContentLoaded', function () {
-            applyResultsLanguage();
-            document.getElementById('englishBtn').onclick = function (e) {
-                e.preventDefault();
-                localStorage.setItem('language', 'english');
-                applyResultsLanguage();
-            };
-            document.getElementById('hindiBtn').onclick = function (e) {
-                e.preventDefault();
-                localStorage.setItem('language', 'hindi');
-                applyResultsLanguage();
-            };
-            document.getElementById('tryBtn').onclick = function (e) {
-                e.preventDefault();
-                window.location.href = 'home.html';
-            };
-        });
-    </script>
-</body>
+document.addEventListener('DOMContentLoaded', async function () {
+  // get the prediction result (prefer sessionStorage, else fallback to /results)
+  let data = null;
+  try {
+    const raw = sessionStorage.getItem('lastResult');
+    if (raw) data = JSON.parse(raw);
+    if (!data) {
+      const r = await fetch('/results');
+      if (r.ok) data = await r.json();
+    }
+  } catch (e) {
+    console.error('Error loading result:', e);
+  }
 
+  // helper for language labels
+  function t(key) {
+    const lang = localStorage.getItem('language') || 'english';
+    const map = {
+      english: {
+        breedName: 'Breed Name:',
+        confidenceScore: 'Confidence Score:',
+        keyBreedInfo: 'Measurements:',
+        setCalib: 'Set calibration (cm per px):',
+        applyCalib: 'Apply',
+        saveBtn: 'Save to Logbook',
+        tryBtn: 'Try Again'
+      },
+      hindi: {
+        breedName: 'नस्ल का नाम:',
+        confidenceScore: 'विश्वास स्कोर:',
+        keyBreedInfo: 'माप:',
+        setCalib: 'कैलिब्रेशन दर्ज करें (सेमी/px):',
+        applyCalib: 'लागू करें',
+        saveBtn: 'लॉगबुक में सहेजें',
+        tryBtn: 'फिर प्रयास करें'
+      }
+    };
+    return (map[lang] && map[lang][key]) || map.english[key];
+  }
+
+  // show top prediction
+  if (data && data.predictions && data.predictions.length > 0) {
+    const best = data.predictions[0];
+    document.getElementById('breedName').innerText = `${t('breedName')} ${best.breed || 'N/A'}`;
+    const conf = Number(best.confidence);
+    document.getElementById('confidenceScore').innerText = `${t('confidenceScore')} ${conf <= 1 ? (conf*100).toFixed(2) + '%' : conf}`;
+  }
+
+  // measurements block
+  const measBlock = document.getElementById('keyBreedInfo');
+  function showNoMeas() {
+    measBlock.innerText = t('keyBreedInfo') + ' No measurements found.';
+  }
+
+  const measurements = data && data.measurements ? data.measurements : null;
+  if (!measurements) {
+    showNoMeas();
+  } else {
+    // Render px / computed cm / angle / positions
+    measBlock.innerHTML = `<strong>${t('keyBreedInfo')}</strong>`;
+    const table = document.createElement('div');
+    table.style.marginTop = '8px';
+    table.style.whiteSpace = 'pre-wrap';
+
+    // helper to append row with px and cm if available
+    function appendRow(name, pxValue, cmValue) {
+      const row = document.createElement('div');
+      let text = `${name}: `;
+      if (pxValue != null) text += `${pxValue} px`;
+      if (cmValue != null) text += `  —  ${cmValue} cm`;
+      row.innerText = text;
+      table.appendChild(row);
+    }
+
+    appendRow('body_length', measurements.body_length_px, measurements.body_length_cm);
+    appendRow('height', measurements.height_px, measurements.height_cm);
+    appendRow('contour_area', measurements.contour_area_px, measurements.contour_area_px ? `${measurements.contour_area_px} px^2` : null);
+    appendRow('rump_angle', measurements.rump_angle, null);
+    if (measurements.tailhead_position) {
+      appendRow('tailhead_position', `[${measurements.tailhead_position.join(', ')}]`, null);
+    }
+    if (measurements.withers_position) {
+      appendRow('withers_position', `[${measurements.withers_position.join(', ')}]`, null);
+    }
+
+    // calibration info
+    const calibRow = document.createElement('div');
+    calibRow.style.marginTop = '10px';
+    const calibVal = measurements.calibration_factor_cm_per_px || null;
+    calibRow.innerHTML = `Calibration (cm/px): ${calibVal !== null ? calibVal : '<em>not set</em>'}`;
+    table.appendChild(calibRow);
+
+    // show input to set calibration client-side
+    const inputRow = document.createElement('div');
+    inputRow.style.marginTop = '8px';
+    inputRow.innerHTML = `
+      <label>${t('setCalib')}</label>
+      <input id="calibInput" type="number" step="any" placeholder="e.g. 0.02" style="width:120px"/>
+      <button id="calibApply">${t('applyCalib')}</button>
+      <div id="calibMsg" style="margin-top:6px;color: #555;"></div>
+    `;
+    table.appendChild(inputRow);
+
+    measBlock.appendChild(table);
+
+    // apply calibration (compute cm from px client-side and keep in-memory 'data' updated)
+    document.getElementById('calibApply').addEventListener('click', function () {
+      const v = parseFloat(document.getElementById('calibInput').value);
+      const msg = document.getElementById('calibMsg');
+      if (!v || isNaN(v) || v <= 0) {
+        msg.innerText = 'Enter a valid positive number.';
+        return;
+      }
+      // update the measurement cm fields using px * v
+      if (measurements.body_length_px) measurements.body_length_cm = (measurements.body_length_px * v).toFixed(2);
+      if (measurements.height_px) measurements.height_cm = (measurements.height_px * v).toFixed(2);
+      measurements.calibration_factor_cm_per_px = v;
+      // persist calibration locally for later use (optional)
+      localStorage.setItem('last_calibration_cm_per_px', v);
+      msg.innerText = `Calibration applied. body_length_cm=${measurements.body_length_cm} cm`;
+      // re-render updated values by reloading the page (quick) or by updating DOM directly:
+      // For simplicity, update DOM by setting text again:
+      // (We simply reload the page to show the changes)
+      sessionStorage.setItem('lastResult', JSON.stringify(data));
+      // re-run this block to re-render with computed cm
+      location.reload();
+    });
+  }
+
+  // Save button - include measurements (including any computed cm)
+  document.getElementById('saveBtn').addEventListener('click', async function () {
+    if (!data || !data.image_url) { alert('Nothing to save'); return; }
+    const payload = {
+      image_url: data.image_url,
+      classification: data.predictions && data.predictions[0] ? data.predictions[0] : {},
+      measurements: data.measurements || {},
+      metadata: { saved_at: new Date().toISOString() }
+    };
+    try {
+      const r = await fetch('/save_evaluation', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(payload)
+      });
+      const j = await r.json();
+      if (r.ok) {
+        alert('Saved to logbook');
+        // store lastResult in sessionStorage (so the saved data matches UI)
+        sessionStorage.setItem('lastResult', JSON.stringify(data));
+        window.location.href = 'logbook.html';
+      } else {
+        alert('Save failed: ' + (j.error || JSON.stringify(j)));
+      }
+    } catch (err) {
+      console.error('Save failed', err);
+      alert('Save failed. See console.');
+    }
+  });
+
+  // Try again
+  document.getElementById('tryBtn').addEventListener('click', () => {
+    window.location.href = 'home.html';
+  });
+
+});
+</script>
+</body>
 </html>
