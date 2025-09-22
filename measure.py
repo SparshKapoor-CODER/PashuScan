@@ -1,4 +1,3 @@
-# measure.py
 import cv2
 import numpy as np
 from scipy.spatial import distance
