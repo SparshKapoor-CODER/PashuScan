@@ -1,4 +1,3 @@
-# cattle.py
 import os
 import csv
 import torch
@@ -18,10 +17,9 @@ LABELS_FILE = "labels.xlsx"
 MODEL_PATH = "dog_breed_model.pth"
 IMG_SIZE = 128
 BATCH_SIZE = 32
-EPOCHS = 500
+EPOCHS = 1000
 LR = 1e-4
 DEBUG = False
-RETRAIN_QUEUE = "retrain_queue.csv"
 # ====================================================
 
 class DogBreedDataset(Dataset):
@@ -101,31 +99,6 @@ def build_datasets(df):
     train_df, val_df = train_test_split(train_df, test_size=0.1, stratify=train_df['breed'], random_state=42)
     return train_df, val_df, test_df
 
-def incorporate_retrain_queue(train_df):
-    """If retrain_queue.csv exists, append those images (if available) into train_df"""
-    if not os.path.exists(RETRAIN_QUEUE):
-        return train_df
-    try:
-        dq = pd.read_csv(RETRAIN_QUEUE)
-        # only use rows with correct filled label and existing path
-        extra_rows = []
-        for _, r in dq.iterrows():
-            path = r.get('image_path', '')
-            correct = r.get('correct', '')
-            if pd.isna(path) or path == "":
-                continue
-            if not os.path.exists(path):
-                continue
-            if not correct or pd.isna(correct):
-                continue
-            # we will add a synthetic row with id as absolute path (so dataset resolves it)
-            extra_rows.append({'id': path, 'breed': correct})
-        if extra_rows:
-            extra_df = pd.DataFrame(extra_rows)
-            train_df = pd.concat([train_df, extra_df], ignore_index=True)
-    except Exception as e:
-        print(f"Could not incorporate retrain queue: {e}")
-    return train_df
 
 def evaluate(model, loader, device):
     model.eval()
@@ -146,7 +119,6 @@ def main():
 
     train_df, val_df, test_df = build_datasets(df)
     # incorporate retrain queue (if any)
-    train_df = incorporate_retrain_queue(train_df)
 
     all_breeds = sorted(pd.concat([train_df, val_df, test_df])['breed'].unique())
     breed_to_idx = {b: i for i, b in enumerate(all_breeds)}
