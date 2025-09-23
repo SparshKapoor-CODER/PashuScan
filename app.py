@@ -92,6 +92,10 @@ def predict_topk(image_pil, topk=3):
     return results
 
 # ---------- Routes ----------
+@app.route('/favicon.ico')
+def favicon():
+    return send_from_directory(app.static_folder, 'favicon.ico', mimetype='image/vnd.microsoft.icon')
+
 @app.route("/")
 def index():
     return render_template("index.html", model_loaded=bool(model), num_classes=len(idx_to_breed))
