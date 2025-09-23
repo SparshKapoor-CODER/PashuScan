@@ -1,21 +1,17 @@
-<!DOCTYPE html>
-<html lang="en">
-
-<head>
+<html lang="en"><head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Results</title>
     <link rel="stylesheet" href="/static/results.css">
     <link rel="preconnect" href="https://fonts.googleapis.com">
-    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-    <link href="https://fonts.googleapis.com/css2?family=Roboto:ital,wght@0,100..900;1,100..900&display=swap"
-        rel="stylesheet">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin="">
+    <link href="https://fonts.googleapis.com/css2?family=Roboto:ital,wght@0,100..900;1,100..900&amp;display=swap" rel="stylesheet">
 </head>
 
 <body>
     <nav>
         <div class="logo">
-            <a href="/templates/index.html"><img src="/logo.png" alt=""></a>
+            <a href="/templates/index.html"><img src="{{ url_for('static', filename='logo.png') }}" alt=""></a>
         </div>
     </nav>
 
@@ -31,7 +27,7 @@
                 <div class="cont-details">
                     <div id="breedName">Breed Name: </div>
                     <div id="confidenceScore">Confidence Score: </div>
-                    <div id="keyBreedInfo">Key Breed Info:</div>
+                    <div id="keyBreedInfo">Measurements: No measurements found.</div>
                     <button class="save" id="saveBtn">Save to Logbook</button>
                 </div>
             </div>
@@ -100,12 +96,15 @@ document.addEventListener('DOMContentLoaded', async function () {
     // Render px / computed cm / angle / positions
     measBlock.innerHTML = `<strong>${t('keyBreedInfo')}</strong>`;
     const table = document.createElement('div');
+    table.className = 'measurements-table';
     table.style.marginTop = '8px';
     table.style.whiteSpace = 'pre-wrap';
 
     // helper to append row with px and cm if available
     function appendRow(name, pxValue, cmValue) {
       const row = document.createElement('div');
+      row.className = 'measurement-row';
+      row.setAttribute('data-measurement', name);
       let text = `${name}: `;
       if (pxValue != null) text += `${pxValue} px`;
       if (cmValue != null) text += `  —  ${cmValue} cm`;
@@ -126,6 +125,7 @@ document.addEventListener('DOMContentLoaded', async function () {
 
     // calibration info
     const calibRow = document.createElement('div');
+    calibRow.className = 'calibration-info';
     calibRow.style.marginTop = '10px';
     const calibVal = measurements.calibration_factor_cm_per_px || null;
     calibRow.innerHTML = `Calibration (cm/px): ${calibVal !== null ? calibVal : '<em>not set</em>'}`;
@@ -133,12 +133,13 @@ document.addEventListener('DOMContentLoaded', async function () {
 
     // show input to set calibration client-side
     const inputRow = document.createElement('div');
+    inputRow.className = 'calibration-input-section';
     inputRow.style.marginTop = '8px';
     inputRow.innerHTML = `
-      <label>${t('setCalib')}</label>
-      <input id="calibInput" type="number" step="any" placeholder="e.g. 0.02" style="width:120px"/>
-      <button id="calibApply">${t('applyCalib')}</button>
-      <div id="calibMsg" style="margin-top:6px;color: #555;"></div>
+      <label class="calibration-label">${t('setCalib')}</label>
+      <input id="calibInput" class="calibration-input" type="number" step="any" placeholder="e.g. 0.02" style="width:120px"/>
+      <button id="calibApply" class="calibration-apply-btn">${t('applyCalib')}</button>
+      <div id="calibMsg" class="calibration-message" style="margin-top:6px;color: #555;"></div>
     `;
     table.appendChild(inputRow);
 
