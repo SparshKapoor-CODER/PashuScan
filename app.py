@@ -1,3 +1,4 @@
+# app.py
 import os
 import io
 import uuid
@@ -19,6 +20,7 @@ import cv2
 from measure import CattleMeasurements
 from data_manager import CattleDataManager
 import predect
+from atc_scoring import ATCScoring
 
 # ---------- Configuration ----------
 BASE_DIR = Path(__file__).parent.resolve()
@@ -29,6 +31,8 @@ LABELS_FILE = BASE_DIR / getattr(predect, "LABELS_FILE", "labels.xlsx")
 IMG_SIZE = getattr(predect, "IMG_SIZE", 128)
 
 DEVICE = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+
+atc_scorer = ATCScoring()
 
 # ---------- App ----------
 app = Flask(__name__, static_folder="static", template_folder="templates")
@@ -180,10 +184,33 @@ def predict():
         print("Measurement extraction error:", e)
         measurements = None
 
+    try:
+        preds = predict_topk(pil, topk=topk)
+        preds_out = [{"breed": b, "confidence": float(p)} for b, p in preds]
+    except Exception as e:
+        preds_out = []
+        print("Prediction error:", e)
+
+    try:
+        img_bgr = cv2.cvtColor(np.array(pil), cv2.COLOR_RGB2BGR)
+        measurements = measure.extract_measurements(img_bgr, bbox=None)
+    except Exception as e:
+        print("Measurement extraction error:", e)
+        measurements = None
+
+    # NEW: Calculate ATC scores if we have breed prediction and measurements
+    atc_evaluation = {}
+    if preds_out and measurements:
+        top_breed_pred = preds_out[0]  # Get top breed prediction
+        atc_evaluation = atc_scorer.calculate_breed_specific_scores(
+            measurements, top_breed_pred
+        )
+
     resp = {
         "image_url": f"/uploads/{unique_name}" if unique_name else None,
-        "predictions": preds_out,
-        "measurements": measurements,
+        "predictions": preds_out,  # Keep breed predictions
+        "measurements": measurements,  # Keep measurements
+        "atc_evaluation": atc_evaluation,  # NEW: ATC scores
         "calibration": measure.calibration_factor
     }
 
