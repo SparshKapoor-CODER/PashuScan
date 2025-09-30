@@ -1,3 +1,4 @@
+# measure.py
 import cv2
 import numpy as np
 from scipy.spatial import distance
@@ -165,6 +166,47 @@ class CattleMeasurements:
                 return None
         except Exception:
             return None
+        
+    def estimate_chest_width(self, contour, offset=(0, 0)):
+        """
+        Estimate chest width from contour by finding widest point
+        """
+        x_off, y_off = offset
+        
+        try:
+            # Find the bounding rectangle
+            x, y, w, h = cv2.boundingRect(contour)
+            
+            # Estimate chest area (middle third of body height)
+            chest_y_start = y + h // 3
+            chest_y_end = y + 2 * h // 3
+            
+            # Find leftmost and rightmost points in chest region
+            chest_points = []
+            for point in contour:
+                px, py = point[0]
+                if chest_y_start <= (py + y_off) <= chest_y_end:
+                    chest_points.append((px + x_off, py + y_off))
+            
+            if len(chest_points) < 2:
+                return {"chest_width_px": 0.0, "chest_width_cm": None}
+            
+            # Find maximum width in chest region
+            chest_points = np.array(chest_points)
+            min_x = np.min(chest_points[:, 0])
+            max_x = np.max(chest_points[:, 0])
+            
+            chest_width_px = float(max_x - min_x)
+            chest_width_cm = self.pixels_to_cm(chest_width_px)
+            
+            return {
+                "chest_width_px": chest_width_px,
+                "chest_width_cm": chest_width_cm
+            }
+        except Exception as e:
+            print(f"Chest width measurement error: {e}")
+            return {"chest_width_px": 0.0, "chest_width_cm": None}
+        
 
     # ---------- Main extraction ----------
     def extract_measurements(self, image_bgr, bbox=None):
