@@ -1,210 +1,291 @@
-<html lang="en"><head>
+<html lang="en">
+<head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Results</title>
     <link rel="stylesheet" href="/static/results.css">
     <link rel="preconnect" href="https://fonts.googleapis.com">
-    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin="">
-    <link href="https://fonts.googleapis.com/css2?family=Roboto:ital,wght@0,100..900;1,100..900&amp;display=swap" rel="stylesheet">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Roboto:ital,wght@0,100..900;1,100..900&display=swap" rel="stylesheet">
 </head>
 
 <body>
     <nav>
         <div class="logo">
-            <a href="/templates/index.html"><img src="{{ url_for('static', filename='logo.png') }}" alt=""></a>
+            <a href="/"><img src="{{ url_for('static', filename='logo.png') }}" alt=""></a>
         </div>
     </nav>
 
     <div class="main">
         <div class="rect">
-
+            <!-- Image display area -->
+            <img id="resultImage" src="" alt="Uploaded image" style="width: 100%; height: 100%; object-fit: cover; display: none;">
         </div>
         <div class="content">
             <h1 id="resultsTitle">Results Screen</h1>
             <div class="cont-down">
-                <div class="cont-rect">
-                </div>
+                <div class="cont-rect"></div>
                 <div class="cont-details">
-                    <div id="breedName">Breed Name: </div>
-                    <div id="confidenceScore">Confidence Score: </div>
-                    <div id="keyBreedInfo">Measurements: No measurements found.</div>
+                    <!-- Breed Prediction Section -->
+                    <div class="result-section">
+                        <h3>Breed Identification</h3>
+                        <div id="breedName">Breed Name: </div>
+                        <div id="confidenceScore">Confidence Score: </div>
+                    </div>
+
+                    <!-- ATC Scoring Section -->
+                    <div id="atcSection" class="atc-results" style="display: none;">
+                        <h3>Animal Type Classification (ATC) Scores</h3>
+                        <div id="atcBreedInfo"></div>
+                        <div class="score-card">
+                            <div class="score-item">
+                                <span>Body Length Score:</span>
+                                <span id="bodyLengthScore" class="score-value">-</span>
+                            </div>
+                            <div class="score-item">
+                                <span>Height Score:</span>
+                                <span id="heightScore" class="score-value">-</span>
+                            </div>
+                            <div class="score-item">
+                                <span>Rump Angle Score:</span>
+                                <span id="rumpAngleScore" class="score-value">-</span>
+                            </div>
+                            <div class="score-item overall-score">
+                                <span><strong>Overall ATC Score:</strong></span>
+                                <span id="overallScore" class="score-value"><strong>-</strong></span>
+                            </div>
+                            <div id="eliteBadge" class="elite-badge" style="display: none;">
+                                🏆 Elite Dam Candidate
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Measurements Section -->
+                    <div class="result-section">
+                        <h3>Measurements</h3>
+                        <div id="keyBreedInfo">No measurements found.</div>
+                    </div>
+
                     <button class="save" id="saveBtn">Save to Logbook</button>
                 </div>
             </div>
             <button class="try" id="tryBtn">Try Again</button>
         </div>
     </div>
+
     <script>
-document.addEventListener('DOMContentLoaded', async function () {
-  // get the prediction result (prefer sessionStorage, else fallback to /results)
-  let data = null;
-  try {
-    const raw = sessionStorage.getItem('lastResult');
-    if (raw) data = JSON.parse(raw);
-    if (!data) {
-      const r = await fetch('/results');
-      if (r.ok) data = await r.json();
-    }
-  } catch (e) {
-    console.error('Error loading result:', e);
-  }
+        document.addEventListener('DOMContentLoaded', async function () {
+            // Get the prediction result
+            let data = null;
+            try {
+                const raw = sessionStorage.getItem('lastResult');
+                if (raw) data = JSON.parse(raw);
+                if (!data) {
+                    const r = await fetch('/results');
+                    if (r.ok) data = await r.json();
+                }
+            } catch (e) {
+                console.error('Error loading result:', e);
+            }
 
-  // helper for language labels
-  function t(key) {
-    const lang = localStorage.getItem('language') || 'english';
-    const map = {
-      english: {
-        breedName: 'Breed Name:',
-        confidenceScore: 'Confidence Score:',
-        keyBreedInfo: 'Measurements:',
-        setCalib: 'Set calibration (cm per px):',
-        applyCalib: 'Apply',
-        saveBtn: 'Save to Logbook',
-        tryBtn: 'Try Again'
-      },
-      hindi: {
-        breedName: 'नस्ल का नाम:',
-        confidenceScore: 'विश्वास स्कोर:',
-        keyBreedInfo: 'माप:',
-        setCalib: 'कैलिब्रेशन दर्ज करें (सेमी/px):',
-        applyCalib: 'लागू करें',
-        saveBtn: 'लॉगबुक में सहेजें',
-        tryBtn: 'फिर प्रयास करें'
-      }
-    };
-    return (map[lang] && map[lang][key]) || map.english[key];
-  }
+            // Helper for language labels
+            function t(key) {
+                const lang = localStorage.getItem('language') || 'english';
+                const map = {
+                    english: {
+                        breedName: 'Breed Name:',
+                        confidenceScore: 'Confidence Score:',
+                        keyBreedInfo: 'Measurements:',
+                        setCalib: 'Set calibration (cm per px):',
+                        applyCalib: 'Apply',
+                        saveBtn: 'Save to Logbook',
+                        tryBtn: 'Try Again',
+                        atcScores: 'ATC Scores',
+                        eliteCandidate: 'Elite Candidate'
+                    },
+                    hindi: {
+                        breedName: 'नस्ल का नाम:',
+                        confidenceScore: 'विश्वास स्कोर:',
+                        keyBreedInfo: 'माप:',
+                        setCalib: 'कैलिब्रेशन दर्ज करें (सेमी/px):',
+                        applyCalib: 'लागू करें',
+                        saveBtn: 'लॉगबुक में सहेजें',
+                        tryBtn: 'फिर प्रयास करें',
+                        atcScores: 'एटीसी स्कोर',
+                        eliteCandidate: 'एलीट उम्मीदवार'
+                    }
+                };
+                return (map[lang] && map[lang][key]) || map.english[key];
+            }
 
-  // show top prediction
-  if (data && data.predictions && data.predictions.length > 0) {
-    const best = data.predictions[0];
-    document.getElementById('breedName').innerText = `${t('breedName')} ${best.breed || 'N/A'}`;
-    const conf = Number(best.confidence);
-    document.getElementById('confidenceScore').innerText = `${t('confidenceScore')} ${conf <= 1 ? (conf*100).toFixed(2) + '%' : conf}`;
-  }
+            // Display uploaded image
+            if (data && data.image_url) {
+                const img = document.getElementById('resultImage');
+                img.src = data.image_url;
+                img.style.display = 'block';
+            }
 
-  // measurements block
-  const measBlock = document.getElementById('keyBreedInfo');
-  function showNoMeas() {
-    measBlock.innerText = t('keyBreedInfo') + ' No measurements found.';
-  }
+            // Show breed prediction
+            if (data && data.predictions && data.predictions.length > 0) {
+                const best = data.predictions[0];
+                document.getElementById('breedName').innerText = `${t('breedName')} ${best.breed || 'N/A'}`;
+                const conf = Number(best.confidence);
+                document.getElementById('confidenceScore').innerText = 
+                    `${t('confidenceScore')} ${conf <= 1 ? (conf*100).toFixed(2) + '%' : conf}`;
+            }
 
-  const measurements = data && data.measurements ? data.measurements : null;
-  if (!measurements) {
-    showNoMeas();
-  } else {
-    // Render px / computed cm / angle / positions
-    measBlock.innerHTML = `<strong>${t('keyBreedInfo')}</strong>`;
-    const table = document.createElement('div');
-    table.className = 'measurements-table';
-    table.style.marginTop = '8px';
-    table.style.whiteSpace = 'pre-wrap';
+            // Show ATC scores if available
+            if (data && data.atc_evaluation && Object.keys(data.atc_evaluation).length > 0) {
+                const atc = data.atc_evaluation;
+                const atcSection = document.getElementById('atcSection');
+                atcSection.style.display = 'block';
 
-    // helper to append row with px and cm if available
-    function appendRow(name, pxValue, cmValue) {
-      const row = document.createElement('div');
-      row.className = 'measurement-row';
-      row.setAttribute('data-measurement', name);
-      let text = `${name}: `;
-      if (pxValue != null) text += `${pxValue} px`;
-      if (cmValue != null) text += `  —  ${cmValue} cm`;
-      row.innerText = text;
-      table.appendChild(row);
-    }
+                // Display breed used for scoring
+                document.getElementById('atcBreedInfo').innerText = 
+                    `Breed used for scoring: ${atc.breed_used_for_scoring || 'Default'}`;
 
-    appendRow('body_length', measurements.body_length_px, measurements.body_length_cm);
-    appendRow('height', measurements.height_px, measurements.height_cm);
-    appendRow('contour_area', measurements.contour_area_px, measurements.contour_area_px ? `${measurements.contour_area_px} px^2` : null);
-    appendRow('rump_angle', measurements.rump_angle, null);
-    if (measurements.tailhead_position) {
-      appendRow('tailhead_position', `[${measurements.tailhead_position.join(', ')}]`, null);
-    }
-    if (measurements.withers_position) {
-      appendRow('withers_position', `[${measurements.withers_position.join(', ')}]`, null);
-    }
+                // Display individual scores
+                if (atc.body_length_score) {
+                    document.getElementById('bodyLengthScore').innerText = atc.body_length_score;
+                }
+                if (atc.height_score) {
+                    document.getElementById('heightScore').innerText = atc.height_score;
+                }
+                if (atc.rump_angle_score) {
+                    document.getElementById('rumpAngleScore').innerText = atc.rump_angle_score;
+                }
+                if (atc.overall_atc_score) {
+                    document.getElementById('overallScore').innerText = atc.overall_atc_score;
+                }
 
-    // calibration info
-    const calibRow = document.createElement('div');
-    calibRow.className = 'calibration-info';
-    calibRow.style.marginTop = '10px';
-    const calibVal = measurements.calibration_factor_cm_per_px || null;
-    calibRow.innerHTML = `Calibration (cm/px): ${calibVal !== null ? calibVal : '<em>not set</em>'}`;
-    table.appendChild(calibRow);
+                // Show elite candidate badge
+                if (atc.elite_candidate) {
+                    document.getElementById('eliteBadge').style.display = 'block';
+                }
+            }
 
-    // show input to set calibration client-side
-    const inputRow = document.createElement('div');
-    inputRow.className = 'calibration-input-section';
-    inputRow.style.marginTop = '8px';
-    inputRow.innerHTML = `
-      <label class="calibration-label">${t('setCalib')}</label>
-      <input id="calibInput" class="calibration-input" type="number" step="any" placeholder="e.g. 0.02" style="width:120px"/>
-      <button id="calibApply" class="calibration-apply-btn">${t('applyCalib')}</button>
-      <div id="calibMsg" class="calibration-message" style="margin-top:6px;color: #555;"></div>
-    `;
-    table.appendChild(inputRow);
+            // Measurements block
+            const measBlock = document.getElementById('keyBreedInfo');
+            function showNoMeas() {
+                measBlock.innerText = 'No measurements found.';
+            }
 
-    measBlock.appendChild(table);
+            const measurements = data && data.measurements ? data.measurements : null;
+            if (!measurements) {
+                showNoMeas();
+            } else {
+                // Render measurements
+                measBlock.innerHTML = '';
+                const table = document.createElement('div');
+                table.className = 'measurements-table';
 
-    // apply calibration (compute cm from px client-side and keep in-memory 'data' updated)
-    document.getElementById('calibApply').addEventListener('click', function () {
-      const v = parseFloat(document.getElementById('calibInput').value);
-      const msg = document.getElementById('calibMsg');
-      if (!v || isNaN(v) || v <= 0) {
-        msg.innerText = 'Enter a valid positive number.';
-        return;
-      }
-      // update the measurement cm fields using px * v
-      if (measurements.body_length_px) measurements.body_length_cm = (measurements.body_length_px * v).toFixed(2);
-      if (measurements.height_px) measurements.height_cm = (measurements.height_px * v).toFixed(2);
-      measurements.calibration_factor_cm_per_px = v;
-      // persist calibration locally for later use (optional)
-      localStorage.setItem('last_calibration_cm_per_px', v);
-      msg.innerText = `Calibration applied. body_length_cm=${measurements.body_length_cm} cm`;
-      // re-render updated values by reloading the page (quick) or by updating DOM directly:
-      // For simplicity, update DOM by setting text again:
-      // (We simply reload the page to show the changes)
-      sessionStorage.setItem('lastResult', JSON.stringify(data));
-      // re-run this block to re-render with computed cm
-      location.reload();
-    });
-  }
+                function appendRow(name, pxValue, cmValue) {
+                    const row = document.createElement('div');
+                    row.className = 'measurement-row';
+                    let text = `${name}: `;
+                    if (pxValue != null) text += `${pxValue} px`;
+                    if (cmValue != null) text += `  —  ${cmValue} cm`;
+                    row.innerText = text;
+                    table.appendChild(row);
+                }
 
-  // Save button - include measurements (including any computed cm)
-  document.getElementById('saveBtn').addEventListener('click', async function () {
-    if (!data || !data.image_url) { alert('Nothing to save'); return; }
-    const payload = {
-      image_url: data.image_url,
-      classification: data.predictions && data.predictions[0] ? data.predictions[0] : {},
-      measurements: data.measurements || {},
-      metadata: { saved_at: new Date().toISOString() }
-    };
-    try {
-      const r = await fetch('/save_evaluation', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(payload)
-      });
-      const j = await r.json();
-      if (r.ok) {
-        alert('Saved to logbook');
-        // store lastResult in sessionStorage (so the saved data matches UI)
-        sessionStorage.setItem('lastResult', JSON.stringify(data));
-        window.location.href = 'logbook.html';
-      } else {
-        alert('Save failed: ' + (j.error || JSON.stringify(j)));
-      }
-    } catch (err) {
-      console.error('Save failed', err);
-      alert('Save failed. See console.');
-    }
-  });
+                appendRow('Body Length', measurements.body_length_px, measurements.body_length_cm);
+                appendRow('Height', measurements.height_px, measurements.height_cm);
+                if (measurements.chest_width_px) {
+                    appendRow('Chest Width', measurements.chest_width_px, measurements.chest_width_cm);
+                }
+                appendRow('Contour Area', measurements.contour_area_px, null);
+                if (measurements.rump_angle) {
+                    appendRow('Rump Angle', measurements.rump_angle + '°', null);
+                }
 
-  // Try again
-  document.getElementById('tryBtn').addEventListener('click', () => {
-    window.location.href = 'home.html';
-  });
+                // Calibration info
+                const calibRow = document.createElement('div');
+                calibRow.className = 'calibration-info';
+                const calibVal = measurements.calibration_factor_cm_per_px;
+                calibRow.innerHTML = `Calibration: ${calibVal !== null ? calibVal.toFixed(6) + ' cm/px' : 'not set'}`;
+                table.appendChild(calibRow);
 
-});
-</script>
+                // Calibration input
+                const inputRow = document.createElement('div');
+                inputRow.className = 'calibration-input-section';
+                inputRow.innerHTML = `
+                    <label class="calibration-label">${t('setCalib')}</label>
+                    <input id="calibInput" class="calibration-input" type="number" step="any" placeholder="e.g. 0.02"/>
+                    <button id="calibApply" class="calibration-apply-btn">${t('applyCalib')}</button>
+                    <div id="calibMsg" class="calibration-message"></div>
+                `;
+                table.appendChild(inputRow);
+
+                measBlock.appendChild(table);
+
+                // Apply calibration
+                document.getElementById('calibApply').addEventListener('click', function () {
+                    const v = parseFloat(document.getElementById('calibInput').value);
+                    const msg = document.getElementById('calibMsg');
+                    if (!v || isNaN(v) || v <= 0) {
+                        msg.innerText = 'Enter a valid positive number.';
+                        return;
+                    }
+                    
+                    // Update measurements with new calibration
+                    if (measurements.body_length_px) measurements.body_length_cm = (measurements.body_length_px * v).toFixed(2);
+                    if (measurements.height_px) measurements.height_cm = (measurements.height_px * v).toFixed(2);
+                    if (measurements.chest_width_px) measurements.chest_width_cm = (measurements.chest_width_px * v).toFixed(2);
+                    measurements.calibration_factor_cm_per_px = v;
+                    
+                    localStorage.setItem('last_calibration_cm_per_px', v);
+                    msg.innerText = 'Calibration applied. Refresh to see updated ATC scores.';
+                    
+                    // Update data and reload
+                    data.measurements = measurements;
+                    sessionStorage.setItem('lastResult', JSON.stringify(data));
+                });
+            }
+
+            // Save button
+            document.getElementById('saveBtn').addEventListener('click', async function () {
+                if (!data || !data.image_url) { 
+                    alert('Nothing to save'); 
+                    return; 
+                }
+                
+                const payload = {
+                    image_url: data.image_url,
+                    classification: data.predictions && data.predictions[0] ? data.predictions[0] : {},
+                    measurements: data.measurements || {},
+                    atc_evaluation: data.atc_evaluation || {}, // Include ATC scores
+                    metadata: { 
+                        saved_at: new Date().toISOString(),
+                        elite_candidate: data.atc_evaluation ? data.atc_evaluation.elite_candidate : false
+                    }
+                };
+                
+                try {
+                    const r = await fetch('/save_evaluation', {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify(payload)
+                    });
+                    const j = await r.json();
+                    if (r.ok) {
+                        alert('Saved to logbook');
+                        sessionStorage.setItem('lastResult', JSON.stringify(data));
+                        window.location.href = 'logbook.html';
+                    } else {
+                        alert('Save failed: ' + (j.error || JSON.stringify(j)));
+                    }
+                } catch (err) {
+                    console.error('Save failed', err);
+                    alert('Save failed. See console.');
+                }
+            });
+
+            // Try again button
+            document.getElementById('tryBtn').addEventListener('click', () => {
+                window.location.href = 'upload.html';
+            });
+        });
+    </script>
 </body>
 </html>
