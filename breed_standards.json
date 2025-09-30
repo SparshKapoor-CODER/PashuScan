@@ -1,0 +1,20 @@
+{
+  "Gir": {
+    "ideal_body_length_cm": {"min": 140, "max": 160, "optimal": 150},
+    "ideal_height_cm": {"min": 130, "max": 150, "optimal": 140},
+    "ideal_chest_width_cm": {"min": 45, "max": 55, "optimal": 50},
+    "ideal_rump_angle": {"min": 40, "max": 50, "optimal": 45}
+  },
+  "Sahiwal": {
+    "ideal_body_length_cm": {"min": 135, "max": 155, "optimal": 145},
+    "ideal_height_cm": {"min": 125, "max": 145, "optimal": 135},
+    "ideal_chest_width_cm": {"min": 43, "max": 53, "optimal": 48},
+    "ideal_rump_angle": {"min": 38, "max": 48, "optimal": 43}
+  },
+  "Default": {
+    "ideal_body_length_cm": {"min": 130, "max": 160, "optimal": 145},
+    "ideal_height_cm": {"min": 120, "max": 150, "optimal": 135},
+    "ideal_chest_width_cm": {"min": 40, "max": 55, "optimal": 47.5},
+    "ideal_rump_angle": {"min": 35, "max": 50, "optimal": 42.5}
+  }
+}
